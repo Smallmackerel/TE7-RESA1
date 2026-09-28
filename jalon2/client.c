@@ -55,6 +55,15 @@ int read_server_message(int socket_fd) {
 	return 1;
 }
 
+int s_message_completion(int socket_fd, struct message *s_message, int pld_len, char* nick_sender, int type, char* infos){
+		s_message->pld_len = pld_len;
+		s_message->nick_sender, nick_sender;
+		s_message->type = type;
+		s_message->infos, infos; // pas d'infos	
+		write_in_socket(socket_fd, s_message, sizeof(s_message));
+		return 0;
+}
+
 // Return 1 to keep running, or 0 when stdin closes or the user quits. 
 int get_and_send_user_message(int socket_fd) {
 	char message[MAX_MESSAGE_SIZE + 1];
@@ -71,17 +80,24 @@ int get_and_send_user_message(int socket_fd) {
 	message_size = bytes_read;
 	message[message_size] = '\0';
 	struct message * s_message = malloc(sizeof(struct message));
-
+	// le NICK_SENDER n'est pas encore géré !!!
 	if (strcmp(message, "/quit") == 0 || strcmp(message, "/quit\n") == 0) {
-		s_message->pld_len = -1;
-		strcpy(s_message->nick_sender, ""); // champ vide pour l'instant (nick_name)
-		s_message->type = 0;
-		strcpy(s_message->infos,""); // pas d'infos	
-		write_in_socket(socket_fd, s_message, sizeof(s_message));
-		return 0;
+		s_message_completion(socket_fd, s_message, -1, "", 0, ""); // quit, detected by pld_len = -1
 	}
-	
-
+	else if (strncmp(message, "/nick", 5) == 0) {
+		char nick_name[128];
+		strcpy(nick_name, message + 6);
+		s_message_completion(socket_fd, s_message, 0, "", NICKNAME_NEW, nick_name); 
+	}
+	else if (strcmp(message, "/quit") == 0 || strcmp(message, "/quit\n") == 0) {
+		s_message_completion(socket_fd, s_message, -1, "", 0, ""); 
+	}
+	else if (strcmp(message, "/quit") == 0 || strcmp(message, "/quit\n") == 0) {
+		s_message_completion(socket_fd, s_message, -1, "", 0, ""); 
+	}
+	else if (strcmp(message, "/quit") == 0 || strcmp(message, "/quit\n") == 0) {
+		s_message_completion(socket_fd, s_message, -1, "", 0, ""); 
+	}
 
 	if (write_in_socket(socket_fd, &message_size, sizeof(message_size)) == 0 ||
 		write_in_socket(socket_fd, message, (size_t)message_size) == 0) {
