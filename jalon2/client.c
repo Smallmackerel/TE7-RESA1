@@ -1,0 +1,131 @@
+#include "common.h"
+
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <poll.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <unistd.h>
+
+#define MAX_MESSAGE_SIZE 4096
+
+int setup_connection(const char *server_ip, const char *server_port) {
+	int socket_fd;
+	int result;
+	struct sockaddr_in server_address;
+
+	printf("Using server IPv4 address %s.\n", server_ip);
+	memset(&server_address, 0, sizeof(server_address));
+	server_address.sin_family = AF_INET;
+	result = inet_aton(server_ip, &server_address.sin_addr);
+	if (result == 0) {
+		fprintf(stderr, "Invalid IPv4 address: %s\n", server_ip);
+		return -1;
+	}
+
+	socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+	die(socket_fd, "socket");
+	printf("TCP socket created.\n");
+
+	server_address.sin_port = htons((unsigned short)atoi(server_port));
+	result = connect(socket_fd, (struct sockaddr *)&server_address, sizeof(server_address));
+	die(result, "connect");
+	printf("Connected to %s:%s.\n", inet_ntoa(server_address.sin_addr), server_port);
+	return socket_fd;
+}
+
+/* Return 1 to keep running, or 0 if the server disconnects or sends an invalid message. */
+int read_server_message(int socket_fd) {
+	int message_size;
+	char message[MAX_MESSAGE_SIZE];
+
+	if (read_from_socket(socket_fd, &message_size, sizeof(message_size)) == 0) {
+		return 0;
+	}
+	if (message_size <= 0 || message_size > MAX_MESSAGE_SIZE) {
+		fprintf(stderr, "Invalid message size from server: %d\n", message_size);
+		return 0;
+	}
+	if (read_from_socket(socket_fd, message, (size_t)message_size) == 0) {
+		return 0;
+	}
+
+	write(STDOUT_FILENO, message, (size_t)message_size);
+	return 1;
+}
+
+// Return 1 to keep running, or 0 when stdin closes or the user quits. 
+int get_and_send_user_message(int socket_fd) {
+	char message[MAX_MESSAGE_SIZE + 1];
+	ssize_t bytes_read;
+	int message_size;
+
+	/* Read up to one message from stdin, then add a terminator for strcmp. */
+	bytes_read = read(STDIN_FILENO, message, MAX_MESSAGE_SIZE);
+	die(bytes_read, "read stdin");
+	if (bytes_read == 0) {
+		return 0;
+	}
+
+	message_size = bytes_read;
+	message[message_size] = '\0';
+	if (strcmp(message, "/quit") == 0 || strcmp(message, "/quit\n") == 0) {
+		int quit_size = 5;
+
+		write_in_socket(socket_fd, &quit_size, sizeof(quit_size));
+		write_in_socket(socket_fd, "/quit", quit_size);
+		return 0;
+	}
+
+	if (write_in_socket(socket_fd, &message_size, sizeof(message_size)) == 0 ||
+		write_in_socket(socket_fd, message, (size_t)message_size) == 0) {
+		return 0;
+	}
+	return 1;
+}
+
+void client_poll_loop(int socket_fd) {
+	struct pollfd watched[2];
+	int running = 1;
+
+	/* Initialize once; poll() fills revents after each call. */
+	watched[0].fd = STDIN_FILENO;
+	watched[0].events = POLLIN;
+	watched[1].fd = socket_fd;
+	watched[1].events = POLLIN;
+
+	while (running) {
+		int ready = poll(watched, 2, -1);
+		die(ready, "poll");
+
+		if ((watched[1].revents & POLLIN) != 0) {
+			running = read_server_message(socket_fd);
+		}
+
+		if (running && (watched[0].revents & POLLIN) != 0) {
+			running = get_and_send_user_message(socket_fd);
+		}
+
+		if ((watched[0].revents & (POLLERR | POLLHUP | POLLNVAL)) != 0 || (watched[1].revents & (POLLERR | POLLHUP | POLLNVAL)) != 0) {
+			running = 0;
+		}
+	}
+}
+
+int main(int argc, char **argv) {
+	int socket_fd;
+
+	if (argc != 3) {
+		fprintf(stderr, "Usage: ./client <server_ipv4> <server_port>\n");
+		return EXIT_FAILURE;
+	}
+	socket_fd = setup_connection(argv[1], argv[2]);
+	if (socket_fd < 0) {
+		return EXIT_FAILURE;
+	}
+	client_poll_loop(socket_fd);
+	close(socket_fd);
+	return EXIT_SUCCESS;
+}
