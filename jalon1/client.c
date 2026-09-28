@@ -1,109 +1,131 @@
+#include "common.h"
+
 #include <arpa/inet.h>
-#include <netdb.h>
 #include <netinet/in.h>
+#include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
-#include <poll.h> // Ajout pour la fonction poll()
 
-#include "common.h"
+#define MAX_MESSAGE_SIZE 4096
 
-void echo_client(int sockfd) {
-    char buff[MSG_LEN];
-    int n;
-    
-    struct pollfd fds[2];
-    
-    fds[0].fd = STDIN_FILENO;
-    fds[0].events = POLLIN;
-    
-    fds[1].fd = sockfd;
-    fds[1].events = POLLIN;
+int setup_connection(const char *server_ip, const char *server_port) {
+	int socket_fd;
+	int result;
+	struct sockaddr_in server_address;
 
-    while (1) {
-        // Polling
-        if (poll(fds, 2, -1) == -1) {
-            perror("poll()");
-            break;
-        }
+	printf("Using server IPv4 address %s.\n", server_ip);
+	memset(&server_address, 0, sizeof(server_address));
+	server_address.sin_family = AF_INET;
+	result = inet_aton(server_ip, &server_address.sin_addr);
+	if (result == 0) {
+		fprintf(stderr, "Invalid IPv4 address: %s\n", server_ip);
+		return -1;
+	}
 
-        // Keyboard entry
-        if (fds[0].revents & POLLIN) {
-            // Cleaning memory
-            memset(buff, 0, MSG_LEN);
-            // Getting message from client
-            printf("Message: ");
-            n = 0;
-            while ((buff[n++] = getchar()) != '\n') {} // trailing '\n' will be sent
-            // Sending message (ECHO)
-            if (send(sockfd, buff, strlen(buff), 0) <= 0) {
-                break;
-            }
-            printf("Message sent!\n");
-        }
+	socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+	die(socket_fd, "socket");
+	printf("TCP socket created.\n");
 
-        // Receiving message from server
-        if (fds[1].revents & POLLIN) {
-            // Cleaning memory
-            memset(buff, 0, MSG_LEN);
-            // Receiving message
-            if (recv(sockfd, buff, MSG_LEN, 0) <= 0) {
-                break;
-            }
-            printf("Received: %s", buff);
-        }
-    }
+	server_address.sin_port = htons((unsigned short)atoi(server_port));
+	result = connect(socket_fd, (struct sockaddr *)&server_address, sizeof(server_address));
+	die(result, "connect");
+	printf("Connected to %s:%s.\n", inet_ntoa(server_address.sin_addr), server_port);
+	return socket_fd;
 }
 
-int handle_connect(char* serv_addr, char* serv_port, int defined) {
-    char* s_addr;
-    char* s_port;
-    if(defined){
-        s_addr = serv_addr;
-        s_port = serv_port;
-    }
-    else{
-        s_addr = SERV_ADDR;
-        s_port = SERV_PORT;
-    }
-    struct addrinfo hints, *result, *rp;
-    int sfd;
-    memset(&hints, 0, sizeof(struct addrinfo));
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    if (getaddrinfo(s_addr, s_port, &hints, &result) != 0) {
-        perror("getaddrinfo()");
-        exit(EXIT_FAILURE);
-    }
-    for (rp = result; rp != NULL; rp = rp->ai_next) {
-        sfd = socket(rp->ai_family, rp->ai_socktype,rp->ai_protocol);
-        if (sfd == -1) {
-            continue;
-        }
-        if (connect(sfd, rp->ai_addr, rp->ai_addrlen) != -1) {
-            break;
-        }
-        close(sfd);
-    }
-    if (rp == NULL) {
-        fprintf(stderr, "Could not connect\n");
-        exit(EXIT_FAILURE);
-    }
-    freeaddrinfo(result);
-    return sfd;
+/* Return 1 to keep running, or 0 if the server disconnects or sends an invalid message. */
+int read_server_message(int socket_fd) {
+	int message_size;
+	char message[MAX_MESSAGE_SIZE];
+
+	if (read_from_socket(socket_fd, &message_size, sizeof(message_size)) == 0) {
+		return 0;
+	}
+	if (message_size <= 0 || message_size > MAX_MESSAGE_SIZE) {
+		fprintf(stderr, "Invalid message size from server: %d\n", message_size);
+		return 0;
+	}
+	if (read_from_socket(socket_fd, message, (size_t)message_size) == 0) {
+		return 0;
+	}
+
+	write(STDOUT_FILENO, message, (size_t)message_size);
+	return 1;
 }
 
-int main(int argc, char* argv[]) {
-    int sfd;
-    if(argc == 3){
-        sfd = handle_connect(argv[1], argv[2], 1);
-    }
-    else{
-        sfd = handle_connect(NULL, NULL, 0);
-    }   
-    echo_client(sfd);
-    close(sfd);
-    return EXIT_SUCCESS;
+// Return 1 to keep running, or 0 when stdin closes or the user quits. 
+int get_and_send_user_message(int socket_fd) {
+	char message[MAX_MESSAGE_SIZE + 1];
+	ssize_t bytes_read;
+	int message_size;
+
+	/* Read up to one message from stdin, then add a terminator for strcmp. */
+	bytes_read = read(STDIN_FILENO, message, MAX_MESSAGE_SIZE);
+	die(bytes_read, "read stdin");
+	if (bytes_read == 0) {
+		return 0;
+	}
+
+	message_size = bytes_read;
+	message[message_size] = '\0';
+	if (strcmp(message, "/quit") == 0 || strcmp(message, "/quit\n") == 0) {
+		int quit_size = 5;
+
+		write_in_socket(socket_fd, &quit_size, sizeof(quit_size));
+		write_in_socket(socket_fd, "/quit", quit_size);
+		return 0;
+	}
+
+	if (write_in_socket(socket_fd, &message_size, sizeof(message_size)) == 0 ||
+		write_in_socket(socket_fd, message, (size_t)message_size) == 0) {
+		return 0;
+	}
+	return 1;
+}
+
+void client_poll_loop(int socket_fd) {
+	struct pollfd watched[2];
+	int running = 1;
+
+	/* Initialize once; poll() fills revents after each call. */
+	watched[0].fd = STDIN_FILENO;
+	watched[0].events = POLLIN;
+	watched[1].fd = socket_fd;
+	watched[1].events = POLLIN;
+
+	while (running) {
+		int ready = poll(watched, 2, -1);
+		die(ready, "poll");
+
+		if ((watched[1].revents & POLLIN) != 0) {
+			running = read_server_message(socket_fd);
+		}
+
+		if (running && (watched[0].revents & POLLIN) != 0) {
+			running = get_and_send_user_message(socket_fd);
+		}
+
+		if ((watched[0].revents & (POLLERR | POLLHUP | POLLNVAL)) != 0 || (watched[1].revents & (POLLERR | POLLHUP | POLLNVAL)) != 0) {
+			running = 0;
+		}
+	}
+}
+
+int main(int argc, char **argv) {
+	int socket_fd;
+
+	if (argc != 3) {
+		fprintf(stderr, "Usage: ./client <server_ipv4> <server_port>\n");
+		return EXIT_FAILURE;
+	}
+	socket_fd = setup_connection(argv[1], argv[2]);
+	if (socket_fd < 0) {
+		return EXIT_FAILURE;
+	}
+	client_poll_loop(socket_fd);
+	close(socket_fd);
+	return EXIT_SUCCESS;
 }

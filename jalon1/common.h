@@ -1,8 +1,10 @@
-#define MSG_LEN 1024
-#define SERV_PORT "8080"
-#define SERV_ADDR "127.0.0.1"
+#ifndef JALON1_COMMON_H
+#define JALON1_COMMON_H
 
-struct info{
-    short s;
-    long l;
-};
+#include <stddef.h>
+
+void die(int val, char *msg);
+int read_from_socket(int fd, void *buf, size_t msg_size);
+int write_in_socket(int fd, void *buf, size_t msg_size);
+
+#endif
