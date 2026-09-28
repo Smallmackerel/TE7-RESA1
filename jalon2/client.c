@@ -1,4 +1,5 @@
 #include "common.h"
+#include "msg_struct.h"
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -38,21 +39,19 @@ int setup_connection(const char *server_ip, const char *server_port) {
 
 /* Return 1 to keep running, or 0 if the server disconnects or sends an invalid message. */
 int read_server_message(int socket_fd) {
-	int message_size;
-	char message[MAX_MESSAGE_SIZE];
+	struct message s_message;
+	char pld[MAX_MESSAGE_SIZE];
 
-	if (read_from_socket(socket_fd, &message_size, sizeof(message_size)) == 0) {
+	if (read_from_socket(socket_fd, &s_message, sizeof(s_message)) == 0) { // receiving struct message
 		return 0;
 	}
-	if (message_size <= 0 || message_size > MAX_MESSAGE_SIZE) {
-		fprintf(stderr, "Invalid message size from server: %d\n", message_size);
-		return 0;
-	}
-	if (read_from_socket(socket_fd, message, (size_t)message_size) == 0) {
-		return 0;
+	if(s_message.pld_len != 0){
+		if (read_from_socket(socket_fd, pld, (size_t)s_message.pld_len) == 0) {
+			return 0;
+		}
 	}
 
-	write(STDOUT_FILENO, message, (size_t)message_size);
+	write(STDOUT_FILENO, pld, (size_t)pld);
 	return 1;
 }
 
@@ -71,13 +70,18 @@ int get_and_send_user_message(int socket_fd) {
 
 	message_size = bytes_read;
 	message[message_size] = '\0';
-	if (strcmp(message, "/quit") == 0 || strcmp(message, "/quit\n") == 0) {
-		int quit_size = 5;
+	struct message * s_message = malloc(sizeof(struct message));
 
-		write_in_socket(socket_fd, &quit_size, sizeof(quit_size));
-		write_in_socket(socket_fd, "/quit", quit_size);
+	if (strcmp(message, "/quit") == 0 || strcmp(message, "/quit\n") == 0) {
+		s_message->pld_len = -1;
+		strcpy(s_message->nick_sender, ""); // champ vide pour l'instant (nick_name)
+		s_message->type = 0;
+		strcpy(s_message->infos,""); // pas d'infos	
+		write_in_socket(socket_fd, s_message, sizeof(s_message));
 		return 0;
 	}
+	
+
 
 	if (write_in_socket(socket_fd, &message_size, sizeof(message_size)) == 0 ||
 		write_in_socket(socket_fd, message, (size_t)message_size) == 0) {
