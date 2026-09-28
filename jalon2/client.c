@@ -80,16 +80,29 @@ int get_and_send_user_message(int socket_fd) {
 	message_size = bytes_read;
 	message[message_size] = '\0';
 	struct message * s_message = malloc(sizeof(struct message));
+	
 	// le NICK_SENDER n'est pas encore géré !!!
+	
 	if (strcmp(message, "/quit") == 0 || strcmp(message, "/quit\n") == 0) {
 		s_message_completion(socket_fd, s_message, -1, "", 0, ""); // quit, detected by pld_len = -1
 	}
 	else if (strncmp(message, "/nick", 5) == 0) {
-		char nick_name[128];
+		char nick_name[NICK_LEN];
+		if(message_size+ +1 > 6 + NICK_LEN){ // gestion taille nickname
+			fprintf(stdout,"Nick name too long (spaces might be the reason)");
+			return 1;
+		}
 		strcpy(nick_name, message + 6);
+		for (int i = 0; i< strlen(nick_name); i++){// gestion caracères spéciaux
+			if(!(65 <= nick_name[i] <= 90 || 97 <= nick_name[i] <= 122 || 48 <= nick_name[i] <= 57)){ // Ascii encoding for char check
+				fprintf(stderr, "Unexpected char in pseudo !");
+				return 1;
+			}
+
+		}
 		s_message_completion(socket_fd, s_message, 0, "", NICKNAME_NEW, nick_name); 
 	}
-	else if (strcmp(message, "/quit") == 0 || strcmp(message, "/quit\n") == 0) {
+	else if (strcmp(message, "/who") == 0 || strcmp(message, "/quit\n") == 0) {
 		s_message_completion(socket_fd, s_message, -1, "", 0, ""); 
 	}
 	else if (strcmp(message, "/quit") == 0 || strcmp(message, "/quit\n") == 0) {
