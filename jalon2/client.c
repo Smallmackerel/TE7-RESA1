@@ -162,6 +162,13 @@ int get_and_send_user_message(int socket_fd) {
 			return 0;
 		}
 	}
+	else{
+
+		s_message_completion(socket_fd, s_message, message_size,"", -1 , "");
+		if(write_in_socket(socket_fd, &message, message_size) == 0){
+			return 0;
+		}
+	}
 
 	return 1;
 }
