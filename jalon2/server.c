@@ -15,30 +15,38 @@
 #define MAX_CLIENTS 128
 
 
-void unicast_send(struct client_info **clients, struct message received,char* payload){
-    struct client_info** cursor=clients;
-  int size = received.pld_len;
-  struct message msg;
-  msg.pld_len = size;
-  strcpy(msg.nick_sender,received.nick_sender);
-  msg.type = MULTICAST_SEND;
-  
-  while(*cursor!=NULL){
-    if (strcmp(received.nick_sender,(*cursor)->nick) ==0){ //eviter d'envoyer un message celui qui demande
-      write_in_socket((*cursor)->fd, &msg, sizeof(struct message));
-      write_in_socket((*cursor)->fd, payload, size);
-    }
-    cursor=&(*cursor)->next;
-  }
-}
-
-void multicast_send(struct client_info **clients, int client_fd,struct message received,char* payload){
+void unicast_send(struct client_info **clients, int client_fd, struct message received,char* payload){
   struct client_info** cursor=clients;
   int size = received.pld_len;
   struct message msg;
   msg.pld_len = size;
   strcpy(msg.nick_sender,received.nick_sender);
-  msg.type = MULTICAST_SEND;
+  msg.type = UNICAST_SEND;
+  
+  while(*cursor!=NULL){
+    if (strcmp(received.nick_sender,(*cursor)->nick) ==0){ //eviter d'envoyer un message celui qui demande
+      write_in_socket((*cursor)->fd, &msg, sizeof(struct message));
+      write_in_socket((*cursor)->fd, payload, size);
+      return;
+    }
+    cursor=&(*cursor)->next;
+  }
+  //gerer le cas ou il na pas destinataire
+  char* msg_error="Pseudo du destinataire non attribué";
+      struct message msg_back;
+      msg_back.pld_len = sizeof(char*);
+      msg_back.type = NICKNAME_NEW;
+      write_in_socket(client_fd, &msg_back, sizeof(struct message));
+      write_in_socket(client_fd, msg_error, sizeof(char*));
+}
+
+void broadcast_send(struct client_info **clients, int client_fd,struct message received,char* payload){
+  struct client_info** cursor=clients;
+  int size = received.pld_len;
+  struct message msg;
+  msg.pld_len = size;
+  strcpy(msg.nick_sender,received.nick_sender);
+  msg.type = BROADCAST_SEND;
   
   while(*cursor!=NULL){
     if (client_fd != (*cursor)->fd){ //eviter d'envoyer un message celui qui demande
@@ -126,7 +134,7 @@ void nickname_new(struct message msg, struct client_info **clients,int client_fd
 }
 
 //fonction qui choisi l'action a realiser
-void action(struct message msg, struct client_info **clients,int client_fd){
+void action(struct message msg, struct client_info **clients,int client_fd,char* payload){
   switch (msg.type){
   case NICKNAME_NEW:
     nickname_new(msg,clients,client_fd);
@@ -136,9 +144,15 @@ void action(struct message msg, struct client_info **clients,int client_fd){
     break;
   case NICKNAME_INFOS:
     nickname_infos(clients,client_fd,msg);
+    break;
   case ECHO_SEND:
+    break;
   case UNICAST_SEND:
+    unicast_send(clients,client_fd,msg,payload);
+    break;
   case BROADCAST_SEND:
+    broadcast_send(clients,client_fd,msg,payload);
+    break;
   case MULTICAST_CREATE:
   case  MULTICAST_LIST:
   case  MULTICAST_JOIN:
@@ -225,18 +239,20 @@ int handle_client_message(int client_fd,struct client_info **clients) {
 		return 1;
 		}
 	if (info.pld_len == 0){
-	  action(info,clients,client_fd);
+	  action(info,clients,client_fd,NULL);
 	  return(1);
 	}
 	// then read the message payload
 	if (read_from_socket(client_fd, message, info.pld_len) == 0) {
 		fprintf(stderr, "Client %d : Socket close\n", client_fd);
 		return 1;
-	}
-
+	}	
 	message[info.pld_len] = '\0';
+	if (1){ //faudra voir pour gerer lerreur void action -> int action
+	  action(info,clients,client_fd,message);
+	  return 1;
+	  }
 	/*
-	
 	if (write_in_socket(client_fd, &message_size, sizeof(message_size)) == 0 ||
 		write_in_socket(client_fd, message, message_size) == 0) {
 		return 1;
