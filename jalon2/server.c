@@ -13,21 +13,48 @@
 
 #define MAX_MESSAGE_SIZE 4096
 #define MAX_CLIENTS 128
+
+/*
+void unicast_send(struct client_info **clients, int client_fd,struct message received,char* payload){
+  
+}
+*/
+void multicast_send(struct client_info **clients, int client_fd,struct message received,char* payload){
+  struct client_info** cursor=clients;
+  int size = received.pld_len;
+  struct message msg;
+  msg.pld_len = size;
+  strcpy(msg.nick_sender,received.nick_sender);
+  msg.type = MULTICAST_SEND;
+  
+  while(*cursor!=NULL){
+    if (client_fd != (*cursor)->fd){ //eviter d'envoyer un message celui qui demande
+      write_in_socket((*cursor)->fd, &msg, sizeof(struct message));
+      write_in_socket((*cursor)->fd, payload, size);
+    }
+    cursor=&(*cursor)->next;
+  }
+  
+  
+
+}
+
 void nickname_infos(struct client_info **clients, int client_fd,struct message received){
   struct client_info** cursor=clients;
   
-  //on recupere la taille de la liste chaine
   while(*cursor!=NULL){
     if (strcmp(received.infos,(*cursor)->nick)==0){
       struct message msg;
       struct sockaddr_in addr = (*cursor)->address;
       msg.pld_len = sizeof(char*);
-      msg.type = NICKNAME_LIST;
+      msg.type = NICKNAME_INFOS;
       write_in_socket(client_fd, &msg, sizeof(struct sockaddr_in));
-      write_in_socket(client_fd, &addr , sizeof(struct sockaddr_in)); 	
+      write_in_socket(client_fd, &addr , sizeof(struct sockaddr_in));
+      return;
     }
     cursor=&(*cursor)->next;
   }
+  //gerer la date ?????
 }
 
 
@@ -98,6 +125,7 @@ void action(struct message msg, struct client_info **clients,int client_fd){
     nickname_list(clients,client_fd);
     break;
   case NICKNAME_INFOS:
+    nickname_infos(clients,client_fd,msg);
   case ECHO_SEND:
   case UNICAST_SEND:
   case BROADCAST_SEND:
