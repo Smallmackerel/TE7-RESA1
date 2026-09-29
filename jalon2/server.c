@@ -14,6 +14,15 @@
 #define MAX_MESSAGE_SIZE 4096
 #define MAX_CLIENTS 128
 
+void echo_send(int client_fd, struct message received,char* payload){
+  int size = received.pld_len;
+  struct message msg;
+  msg.pld_len = size;
+  strcpy(msg.nick_sender,received.nick_sender);
+  msg.type = ECHO_SEND;
+  write_in_socket(client_fd, &msg, sizeof(struct message));
+  write_in_socket(client_fd, payload, size);
+}
 
 void unicast_send(struct client_info **clients, int client_fd, struct message received,char* payload){
   struct client_info** cursor=clients;
@@ -35,7 +44,7 @@ void unicast_send(struct client_info **clients, int client_fd, struct message re
   char* msg_error="Pseudo du destinataire non attribué";
       struct message msg_back;
       msg_back.pld_len = sizeof(char*);
-      msg_back.type = NICKNAME_NEW;
+      msg_back.type = UNICAST_SEND;
       write_in_socket(client_fd, &msg_back, sizeof(struct message));
       write_in_socket(client_fd, msg_error, sizeof(char*));
 }
@@ -123,7 +132,7 @@ void nickname_new(struct message msg, struct client_info **clients,int client_fd
     cursor=&(*cursor)->next;    
   }
   //on met à jour le nom
-  cursor=clients; //on retourne au debut
+  cursor=clients; //on retourne au debut de la liste chaine
   while(*cursor!=NULL){
     if ((*cursor)->fd == client_fd){
       strcpy((*cursor)->nick,msg.infos);
@@ -146,6 +155,7 @@ void action(struct message msg, struct client_info **clients,int client_fd,char*
     nickname_infos(clients,client_fd,msg);
     break;
   case ECHO_SEND:
+    echo_send(client_fd,msg,payload);
     break;
   case UNICAST_SEND:
     unicast_send(clients,client_fd,msg,payload);
