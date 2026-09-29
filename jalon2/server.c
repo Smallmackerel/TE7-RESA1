@@ -14,15 +14,25 @@
 #define MAX_MESSAGE_SIZE 4096
 #define MAX_CLIENTS 128
 
+void nickname_list(){
+  
+
+}
+
 //ajoute/modifie un nom.
 void nickname_new(struct message msg, struct client_info **clients,int client_fd){
   struct client_info** cursor=clients;
-  char* message="Pseudo déjà attribué";
+  
   
   // on verifie chaque pseudo pour voir sil nexiste pas deja
   while(*cursor!=NULL){
     if (strcmp((*cursor)->nick,msg.infos) == 0){
-      write_in_socket(client_fd, message, sizeof(message));  
+      char* msg_error="Pseudo déjà attribué";
+      struct message msg;
+      msg.pld_len = sizeof(char*);
+      msg.type = NICKNAME_NEW;
+      write_in_socket(client_fd, &msg, sizeof(struct message));
+      write_in_socket(client_fd, msg_error, sizeof(char*)); 
       return;
     }
     cursor=&(*cursor)->next;    
