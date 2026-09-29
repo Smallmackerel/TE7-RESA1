@@ -14,11 +14,24 @@
 #define MAX_MESSAGE_SIZE 4096
 #define MAX_CLIENTS 128
 
-/*
-void unicast_send(struct client_info **clients, int client_fd,struct message received,char* payload){
+
+void unicast_send(struct client_info **clients, struct message received,char* payload){
+    struct client_info** cursor=clients;
+  int size = received.pld_len;
+  struct message msg;
+  msg.pld_len = size;
+  strcpy(msg.nick_sender,received.nick_sender);
+  msg.type = MULTICAST_SEND;
   
+  while(*cursor!=NULL){
+    if (strcmp(received.nick_sender,(*cursor)->nick) ==0){ //eviter d'envoyer un message celui qui demande
+      write_in_socket((*cursor)->fd, &msg, sizeof(struct message));
+      write_in_socket((*cursor)->fd, payload, size);
+    }
+    cursor=&(*cursor)->next;
+  }
 }
-*/
+
 void multicast_send(struct client_info **clients, int client_fd,struct message received,char* payload){
   struct client_info** cursor=clients;
   int size = received.pld_len;
@@ -34,9 +47,6 @@ void multicast_send(struct client_info **clients, int client_fd,struct message r
     }
     cursor=&(*cursor)->next;
   }
-  
-  
-
 }
 
 void nickname_infos(struct client_info **clients, int client_fd,struct message received){
