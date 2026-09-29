@@ -14,8 +14,31 @@
 #define MAX_MESSAGE_SIZE 4096
 #define MAX_CLIENTS 128
 
-void nickname_list(){
-  
+void nickname_list(struct client_info **clients, int client_fd){
+  struct client_info** cursor=clients;
+  int size=0;
+  //on recupere la taille de la liste chaine
+  while(*cursor!=NULL){
+    size++;
+    cursor=&(*cursor)->next;
+  }
+  char** tab_name=malloc(size);
+  int j=0;
+  cursor=clients;
+  //on stocke tous les noms dans le tableau
+  while(*cursor!=NULL){
+    if (client_fd != (*cursor)->fd){ //eviter de renvoyer le nom de celui qui demande
+      strcpy(tab_name[j],(*cursor)->nick);
+      j++;
+    }
+    cursor=&(*cursor)->next;
+  }
+  struct message msg;
+  msg.pld_len = size*sizeof(char*);
+  msg.type = NICKNAME_LIST;
+  write_in_socket(client_fd, &msg, sizeof(struct message));
+  write_in_socket(client_fd, tab_name, size*sizeof(char*)); 
+
 
 }
 
@@ -55,7 +78,7 @@ void action(struct message msg, struct client_info **clients,int client_fd){
     nickname_new(msg,clients,client_fd);
     break;
   case NICKNAME_LIST:
-    nickname_new(msg,clients,client_fd);
+    nickname_list(clients,client_fd);
     break;
   case NICKNAME_INFOS:
   case ECHO_SEND:
