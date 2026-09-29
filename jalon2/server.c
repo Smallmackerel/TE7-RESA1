@@ -14,7 +14,34 @@
 #define MAX_MESSAGE_SIZE 4096
 #define MAX_CLIENTS 128
 
+//ajoute/modifie un nom.
+void nickname_new(struct message msg, struct client_info **clients,int client_fd){
+  struct client_info** cursor=clients;
+  
+  while(*cursor!=NULL){
+    if ((*cursor)->fd == client_fd){
+      strcpy((*cursor)->nick,msg.infos);//on met à jour le nom
+      return;
+    }
+    cursor=&(*cursor)->next;    
+  }
+}
 
+//fonction qui choisi l'action a realiser
+void action(struct message info){
+  switch (info.type){
+  case NICKNAME_NEW:
+    //nickname_new(info,client,fd);
+    break;
+  case NICKNAME_LIST:
+  case NICKNAME_INFOS:
+  case ECHO_SEND:
+  case UNICAST_SEND:
+  case BROADCAST_SEND:
+  }
+  return;
+  
+}
 
 
 int setup_listening_socket(int port) {
@@ -79,6 +106,7 @@ int handle_client_message(int client_fd) {
 		fprintf(stderr, "Client %d : Socket close\n", client_fd);
 		return 1;
 	}
+	//regarder si le client quitte
 	if (info.pld_len == -1) {
 		printf("Client %d requested to quit.\n", client_fd);
 		return 1;
