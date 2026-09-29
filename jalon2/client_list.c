@@ -2,10 +2,6 @@
 
 #include <stdlib.h>
 
-
-
-
-
 int client_list_add(struct client_info **clients, int fd, const struct sockaddr_in *address) {
 	struct client_info *client = malloc(sizeof(*client));
 	if (client == NULL) {

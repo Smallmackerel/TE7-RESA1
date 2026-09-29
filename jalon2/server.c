@@ -115,7 +115,7 @@ void nickname_list(struct client_info **clients, int client_fd){
 
 //ajoute/modifie un nom.
 void nickname_new(struct message msg, struct client_info **clients,int client_fd){
-  struct client_info** cursor=clients;
+  struct client_info** cursor = clients;
   
   
   // on verifie chaque pseudo pour voir sil nexiste pas deja
@@ -138,12 +138,13 @@ void nickname_new(struct message msg, struct client_info **clients,int client_fd
       strcpy((*cursor)->nick,msg.infos);
       return;
     }
-    cursor=&(*cursor)->next;    
+    cursor=&(*cursor)->next;
   }
 }
 
 //fonction qui choisi l'action a realiser
 void action(struct message msg, struct client_info **clients,int client_fd,char* payload){
+  printf("lancé");
   switch (msg.type){
   case NICKNAME_NEW:
     nickname_new(msg,clients,client_fd);
@@ -243,6 +244,7 @@ int handle_client_message(int client_fd,struct client_info **clients) {
 		fprintf(stderr, "Client %d : Socket close\n", client_fd);
 		return 1;
 	}
+	printf("%d\n", info.pld_len);
 	//regarder si le client quitte
 	if (info.pld_len == -1) {
 		printf("Client %d requested to quit.\n", client_fd);

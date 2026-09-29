@@ -45,33 +45,40 @@ int setup_connection(const char *server_ip, const char *server_port) {
 
 /* Return 1 to keep running, or 0 if the server disconnects or sends an invalid message. */
 int read_server_message(int socket_fd) {
-	struct message s_message;
-	char pld[MAX_MESSAGE_SIZE];
+    struct message s_message;
+    char pld[MAX_MESSAGE_SIZE];
 
-	if (read_from_socket(socket_fd, &s_message, sizeof(s_message)) == 0) { // receiving struct message
-		return 0;
-	}
-	if(s_message.pld_len != 0){
-		if (read_from_socket(socket_fd, pld, (size_t)s_message.pld_len) == 0) {
-			return 0;
-		}
-	}
+    if (read_from_socket(socket_fd, &s_message, sizeof(s_message)) == 0)
+        return 0;
 
-	write(STDOUT_FILENO, pld, (size_t)pld);
-	return 1;
+    if (s_message.pld_len < 0 || s_message.pld_len > MAX_MESSAGE_SIZE)
+        return 0;
+
+    if (s_message.pld_len > 0) {
+        if (read_from_socket(socket_fd, pld, (size_t)s_message.pld_len) == 0)
+            return 0;
+
+        write(STDOUT_FILENO, pld, (size_t)s_message.pld_len);
+    }
+
+    return 1;
 }
 
-int s_message_completion(int socket_fd, struct message *s_message, int pld_len, char* nick_sender, int type, char* infos){
-		s_message->pld_len = pld_len;
-		for (int i = 0; i<NICK_LEN; i++){
-			s_message->nick_sender[i] = nick_sender[i]; // à régler
-		}
-		s_message->type = type;
-		for (int i = 0; i<INFOS_LEN; i++){
-			s_message->infos[i] = infos[i]; // pas d'infos
-		}
-		write_in_socket(socket_fd, s_message, sizeof(s_message));
-		return 0;
+int s_message_completion(int socket_fd, struct message *s_message,
+                         int pld_len, const char *nick_sender,
+                         enum msg_type type, const char *infos) 
+	{
+	// complète la struct message
+	memset(s_message, 0, sizeof(*s_message));
+    s_message->pld_len = pld_len;
+    s_message->type = type;
+
+    snprintf(s_message->nick_sender, sizeof(s_message->nick_sender),
+             "%s", nick_sender);
+    snprintf(s_message->infos, sizeof(s_message->infos),
+             "%s", infos);
+
+    return write_in_socket(socket_fd, s_message, sizeof(*s_message)) != 0;
 }
 
 // Return 1 to keep running, or 0 when stdin closes or the user quits. 
@@ -168,10 +175,14 @@ int get_and_send_user_message(int socket_fd) {
 			return 0;
 		}
 	}
-	else{
+	else {
+		if (!s_message_completion(socket_fd, s_message, message_size, "", ECHO_SEND, "")) {
+			free(s_message);
+			return 0;
+		}
 
-		s_message_completion(socket_fd, s_message, message_size,"", -1 , "");
-		if(write_in_socket(socket_fd, &message, message_size) == 0){
+		if (write_in_socket(socket_fd, message, (size_t)message_size) == 0) {
+			free(s_message);
 			return 0;
 		}
 	}
