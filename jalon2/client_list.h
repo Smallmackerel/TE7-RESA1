@@ -1,7 +1,17 @@
 #ifndef JALON1_CLIENT_LIST_H
 #define JALON1_CLIENT_LIST_H
 
+#define NICK_LEN 128
 #include <netinet/in.h>
+
+//deplacer la structure dans le point h pour que tout le monde y accede
+struct client_info {
+  int fd;
+  struct sockaddr_in address;
+  char nick[NICK_LEN];
+  struct client_info *next;
+};
+
 
 struct client_info;
 
