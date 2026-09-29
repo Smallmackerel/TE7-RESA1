@@ -39,12 +39,14 @@ void nickname_new(struct message msg, struct client_info **clients,int client_fd
 }
 
 //fonction qui choisi l'action a realiser
-void action(struct message info){
-  switch (info.type){
+void action(struct message msg, struct client_info **clients,int client_fd){
+  switch (msg.type){
   case NICKNAME_NEW:
-    //nickname_new(info,client,fd);
+    nickname_new(msg,clients,client_fd);
     break;
   case NICKNAME_LIST:
+    nickname_new(msg,clients,client_fd);
+    break;
   case NICKNAME_INFOS:
   case ECHO_SEND:
   case UNICAST_SEND:
@@ -120,9 +122,9 @@ void accept_and_insert_client(int listen_fd, struct pollfd poll_fds[MAX_CLIENTS]
 }
 
 /* Return 1 when the client should be disconnected, 0 after a successful echo. */
-int handle_client_message(int client_fd) {
+int handle_client_message(int client_fd,struct client_info **clients) {
   struct message info;
-	char message[MAX_MESSAGE_SIZE + 1];
+  char message[MAX_MESSAGE_SIZE + 1];
 
 	// first read next message size
 	if (read_from_socket(client_fd, &info, sizeof(struct message)) == 0) {
@@ -135,6 +137,7 @@ int handle_client_message(int client_fd) {
 		return 1;
 		}
 	if (info.pld_len == 0){
+	  action(info,clients,client_fd);
 	  return(1);
 	}
 	// then read the message payload
@@ -183,7 +186,7 @@ void server_poll_loop(int listen_fd, struct pollfd poll_fds[MAX_CLIENTS],
 			}
 
 			if ((returned_events & POLLIN) != 0) {
-				close_connection = handle_client_message(poll_fds[slot].fd);
+			  close_connection = handle_client_message(poll_fds[slot].fd,clients);
 			}
 			if ((returned_events & (POLLERR | POLLHUP | POLLNVAL)) != 0) {
 				close_connection = 1;
