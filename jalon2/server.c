@@ -13,6 +13,24 @@
 
 #define MAX_MESSAGE_SIZE 4096
 #define MAX_CLIENTS 128
+void nickname_infos(struct client_info **clients, int client_fd,struct message received){
+  struct client_info** cursor=clients;
+  
+  //on recupere la taille de la liste chaine
+  while(*cursor!=NULL){
+    if (strcmp(received.infos,(*cursor)->nick)==0){
+      struct message msg;
+      struct sockaddr_in addr = (*cursor)->address;
+      msg.pld_len = sizeof(char*);
+      msg.type = NICKNAME_LIST;
+      write_in_socket(client_fd, &msg, sizeof(struct sockaddr_in));
+      write_in_socket(client_fd, &addr , sizeof(struct sockaddr_in)); 	
+    }
+    cursor=&(*cursor)->next;
+  }
+}
+
+
 
 void nickname_list(struct client_info **clients, int client_fd){
   struct client_info** cursor=clients;
@@ -37,9 +55,8 @@ void nickname_list(struct client_info **clients, int client_fd){
   msg.pld_len = size*sizeof(char*);
   msg.type = NICKNAME_LIST;
   write_in_socket(client_fd, &msg, sizeof(struct message));
-  write_in_socket(client_fd, tab_name, size*sizeof(char*)); 
-
-
+  write_in_socket(client_fd, tab_name, size*sizeof(char*));
+  free(tab_name);
 }
 
 //ajoute/modifie un nom.
