@@ -1,3 +1,9 @@
+// vérifier la taille de déclaration des tableaux
+// s'occuper du nick_sender
+// gestion de la date
+// merge des codes serveurs et clients
+
+
 #include "common.h"
 #include "msg_struct.h"
 
