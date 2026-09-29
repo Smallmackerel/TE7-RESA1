@@ -17,10 +17,21 @@
 //ajoute/modifie un nom.
 void nickname_new(struct message msg, struct client_info **clients,int client_fd){
   struct client_info** cursor=clients;
+  char* message="Pseudo déjà attribué";
   
+  // on verifie chaque pseudo pour voir sil nexiste pas deja
+  while(*cursor!=NULL){
+    if (strcmp((*cursor)->nick,msg.infos) == 0){
+      write_in_socket(client_fd, message, sizeof(message));  
+      return;
+    }
+    cursor=&(*cursor)->next;    
+  }
+  //on met à jour le nom
+  cursor=clients; //on retourne au debut
   while(*cursor!=NULL){
     if ((*cursor)->fd == client_fd){
-      strcpy((*cursor)->nick,msg.infos);//on met à jour le nom
+      strcpy((*cursor)->nick,msg.infos);
       return;
     }
     cursor=&(*cursor)->next;    
@@ -38,6 +49,18 @@ void action(struct message info){
   case ECHO_SEND:
   case UNICAST_SEND:
   case BROADCAST_SEND:
+  case MULTICAST_CREATE:
+  case  MULTICAST_LIST:
+  case  MULTICAST_JOIN:
+  case  MULTICAST_SEND:
+  case  MULTICAST_QUIT:
+  case  FILE_REQUEST:
+  case  FILE_ACCEPT:
+  case  FILE_REJECT:
+  case  FILE_SEND:
+  case FILE_ACK:
+  default:
+    return;
   }
   return;
   

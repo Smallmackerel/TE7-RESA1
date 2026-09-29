@@ -12,7 +12,7 @@ int client_list_add(struct client_info **clients, int fd, const struct sockaddr_
 		return -1;
 	}
 	client->fd = fd;
-	client->nick[0]='\0';
+	client->nick[0]='\0';//on initialise le nom avec le nom vide
 	client->address = *address;
 	client->next = *clients;
 	*clients = client;
